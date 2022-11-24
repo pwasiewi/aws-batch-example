@@ -1,0 +1,33 @@
+### https://github.com/dejonghe/aws-batch-example
+
+export DIR=$(pwd)/cloudformation 
+### creates bucket and VPC, 2 subnets eu-west-1a i eu-west-1c
+aws cloudformation deploy --stack-name aws-batch-stack-dev-vpc --template-file ${DIR}/newvpcstack.yaml --capabilities CAPABILITY_NAMED_IAM 
+
+### creates containers
+./scripts/env_prep.sh -b aws-batch-example-piotr 
+
+### pair of ec2 keys
+aws ec2 create-key-pair \ 
+   --key-name my-key-pair \ 
+   --key-type ed25519 \ 
+   --key-format pem \ 
+   --query "KeyMaterial" \ 
+   --output text > my-key-pair.pem 
+
+### creates compute aws batch env. 
+aws cloudformation create-stack --template-body file://cloudformation/batch/batch-example.yml --stack-name batch-example --parameters '[{"ParameterKey":"CloudToolsBucket","ParameterValue":"aws-batch-example-piotr"}, {"ParameterKey":"Ec2KeyPair","ParameterValue":"my-key-pair"}]' --capabilities CAPABILITY_NAMED_IAM 
+
+### triggers lambda firing aws batch
+aws s3 cp ./README.md s3://batch-poc-617579723481-eu-west-1
+
+### removes all files (it destroys the last stack execution)
+aws s3 rm s3://batch-poc-617579723481-eu-west-1 --recursive
+aws s3 rm s3://aws-batch-example-piotr --recursive
+
+### removes all stacks
+aws cloudformation delete-stack --stack-name batch-example
+aws cloudformation wait stack-delete-complete --stack-name batch-example && \
+aws cloudformation delete-stack --stack-name aws-batch-stack-dev-vpc
+
+aws cloudformation describe-stack-events --stack-name aws-batch-stack-dev-vpc

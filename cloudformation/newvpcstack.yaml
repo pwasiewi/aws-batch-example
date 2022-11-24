@@ -1,0 +1,144 @@
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: VPC and two public subnets (have internet gateway)
+
+Parameters:
+  roleStackName:
+    Type: String
+    Default: aws-batch-stack-dev-role
+  networkStackName:
+    Type: String
+    Default: aws-batch-stack-dev-vpc
+  s3BucketName:
+    Type: String
+    Default: aws-batch-example-piotr
+
+Resources:
+  DestinationBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref s3BucketName
+
+  batchVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.11.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: 'true'
+      Tags:
+        - Key: Name
+          Value: myvpc
+
+  publicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref batchVPC
+      CidrBlock: 10.11.0.0/24
+      AvailabilityZone: eu-west-1a
+      MapPublicIpOnLaunch: 'true'
+      Tags:
+        - Key: Name
+          Value: public-subnet-1
+
+  publicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref batchVPC
+      CidrBlock: 10.11.1.0/24
+      AvailabilityZone: eu-west-1c
+      MapPublicIpOnLaunch: 'true'
+      Tags:
+        - Key: Name
+          Value: public-subnet-2
+
+  myigw:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: my-internet-gw
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref batchVPC
+      InternetGatewayId: !Ref myigw
+
+  routeTablePublic:
+    Type: AWS::EC2::RouteTable
+    DependsOn: AttachGateway
+    Properties:
+      VpcId: !Ref batchVPC
+      Tags:
+        - Key: Name
+          Value: my-route-table-public
+
+  routeInternetGateway:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref routeTablePublic
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref myigw
+
+  routeTablepublicSubnet1Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref publicSubnet1
+      RouteTableId: !Ref routeTablePublic
+
+  routeTablepublicSubnet2Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref publicSubnet2
+      RouteTableId: !Ref routeTablePublic
+
+#  SecurityGroup01:
+#    Type: AWS::EC2::SecurityGroup
+#    Properties:
+#      GroupDescription: Enable SSH access via port 22
+#      SecurityGroupIngress:
+#      - IpProtocol: tcp
+#        FromPort: '22'
+#        ToPort: '22'
+#        CidrIp: 0.0.0.0/0
+#      Tags:
+#      - Key: Name
+#        #Value: !Join [ '', [ Ref: NamePrefix, '-sg01' ]]
+#        Value: secureGroupEnableSSH
+#      VpcId: !Ref batchVPC
+
+Outputs:
+  Vpc:
+    Description: VPC 
+    Value:
+      Ref: batchVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCID'
+  
+  VpcCidrBlock:
+    Description: batchVPC's CIDR block.
+    Value:
+      Fn::GetAtt:
+        - batchVPC
+        - CidrBlock
+    Export:
+      Name: batchVPCidrBlock
+
+  VpcDefaultSecurityGroup:
+    Description: Default security group for VPC 
+    Value: !GetAtt batchVPC.DefaultSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-DefaultsecurityGroup'
+  
+  Subnet1:
+    Description: First subnet
+    Value: !Ref publicSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-Subnet-1'
+
+  Subnet2:
+    Description: Second subnet
+    Value: !Ref publicSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-Subnet-2'
+

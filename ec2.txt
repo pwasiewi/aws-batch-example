@@ -1,0 +1,19 @@
+### https://github.com/jeffscottlevine/aws-vpc-amzn2
+
+### creates ec2 key pair
+aws ec2 create-key-pair \
+    --key-name my-key-pair \
+    --key-type ed25519 \
+    --key-format pem \
+    --query "KeyMaterial" \
+    --output text > my-key-pair.pem
+
+### to use ssh - rights are set to 600
+chmod 600 my-key-pair.pem
+
+### create ec2 from the latest AMI image
+aws cloudformation deploy --stack-name aws-cf-vpc-amazon-linux-2 --template-file ${DIR}/aws-cf-vpc-amazon-linux-2.yaml --capabilities CAPABILITY_NAMED_IAM
+
+### removes the stack with all the content
+aws cloudformation delete-stack --stack-name aws-cf-vpc-amazon-linux-2
+aws cloudformation wait stack-delete-complete --stack-name aws-cf-vpc-amazon-linux-2

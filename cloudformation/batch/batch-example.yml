@@ -1,6 +1,15 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Creates a POC AWS Batch environment, includes IAM resources, S3, Lambda, and Batch.
 Parameters:
+  roleStackName:
+    Type: String
+    Default: aws-batch-stack-dev-role
+  networkStackName:
+    Type: String
+    Default: aws-batch-stack-dev-vpc
+  s3BucketName:
+    Type: String
+    Default: aws-batch-example-piotr
   Release:
     Type: String
     Description: 'Release Identifier'
@@ -16,20 +25,20 @@ Parameters:
     Type: String
     Description: 'Name of Queue to be created'
     Default: MyQueue
-  VPCCidr:
-    Type: String
-    Description: 'Cidr Block of the VPC, allows for ssh access internally.'
-    Default: '10.0.0.0/8'
-    MinLength: "9"
-    MaxLength: "18"
-    AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
-    ConstraintDescription: "Must be valid CIDR notation (i.e. x.x.x.x/x)."
-  VPC:
-    Type: AWS::EC2::VPC::Id
-    Description: 'VPC ID to boot compute into'
-  Subnets:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: 'List of Subnets to boot into'
+  #VPCCidr:
+  #  Type: String
+  #  Description: 'Cidr Block of the VPC, allows for ssh access internally.'
+  #  Default: '10.0.0.0/8'
+  #  MinLength: "9"
+  #  MaxLength: "18"
+  #  AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
+  #  ConstraintDescription: "Must be valid CIDR notation (i.e. x.x.x.x/x)."
+  #VPC:
+  #  Type: AWS::EC2::VPC::Id
+  #  Description: 'VPC ID to boot compute into'
+  #Subnets:
+  #  Type: List<AWS::EC2::Subnet::Id>
+  #  Description: 'List of Subnets to boot into'
   AMI:
     Description: ECS Optimized AMI ID
     Type: AWS::SSM::Parameter::Value<String>
@@ -149,7 +158,7 @@ Resources:
       Handler: lambda_function.lambda_handler
       MemorySize: 128
       Role: !GetAtt [ LambdaTriggerIAMRole, Arn ]
-      Runtime: python3.6
+      Runtime: python3.9
       Timeout: 60
   S3LambdaEvent:
     Type: 'AWS::Lambda::Permission'
@@ -176,11 +185,15 @@ Resources:
         - CidrIp: 0.0.0.0/0
           IpProtocol: '-1'
       SecurityGroupIngress:
-        - CidrIp: !Ref VPCCidr
+        #- CidrIp: !Ref VPCCidr
+        - CidrIp: 
+              Fn::ImportValue: !Sub 'batchVPCidrBlock'
           IpProtocol: tcp
           FromPort: '22'
           ToPort: '22'
-      VpcId: !Ref VPC
+      #VpcId: !Ref VPC
+      VpcId: 
+          Fn::ImportValue: !Sub '${networkStackName}-VPCID'
   BatchCompute:
     Type: "AWS::Batch::ComputeEnvironment"
     Properties:
@@ -191,16 +204,17 @@ Resources:
         MaxvCpus: 24
         SecurityGroupIds: 
           - !Ref BatchSecGroup
-        Subnets: !Ref Subnets
+        #Subnets: !Ref Subnets
+        Subnets: [ Fn::ImportValue: !Sub '${networkStackName}-Subnet-1', Fn::ImportValue: !Sub '${networkStackName}-Subnet-2' ] 
         Type: Ec2
-        MinvCpus: 0
+        MinvCpus: 2
         ImageId: !Ref AMI
         InstanceRole: !Ref BatchInstanceProfile
         InstanceTypes: 
           - optimal
         Ec2KeyPair: !Ref Ec2KeyPair
         Tags: { "Name": "Batch POC" }
-        DesiredvCpus: 0
+        DesiredvCpus: 2
       State: ENABLED
   Queue:
     Type: "AWS::Batch::JobQueue"

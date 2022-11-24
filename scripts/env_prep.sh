@@ -95,8 +95,13 @@ if [[ "$#" -lt 2 ]] ; then
   echo 'parse error'
   usage
 fi
+
+
 PROFILE=default
 RELEASE=develop
+
+
+
 while getopts "p:r:b:" opt; do
   case $opt in
     p)
@@ -128,7 +133,9 @@ echo -e "Starting prep process.\nIf this script does not report success check th
 
 # Setup AWS vars
 REGION=$(aws configure list --profile ${PROFILE} | grep region | awk '{print $2}')
+#REGION=eu-west-1
 ACCOUNT_ID=$(aws ec2 describe-security-groups --query 'SecurityGroups[0].OwnerId' --output text --profile ${PROFILE})
+#ACCOUNT_ID=617579723481
 
 # Build your lambda
 build_lambda
